@@ -11,6 +11,8 @@ FreeLauncher 3.0 is a standalone, ultra-premium offline launcher client built fo
 * 🛠️ **Mod Loader Integration:** Built-in compiler hooks to seamlessly toggle between Vanilla, Fabric, and Forge.
 * 🎨 **Discord Rich Presence:** Dynamic status system showing friends what username and game version you are playing.
 * 📁 **Mods Folder Shortcut:** Single-click interface button to instantly drop optimization mod JARs right into place.
+* 📦 **Legacy Support:** You Can play from 1.1 upto 26.3 ( Though It may not download sometimes or u need older version of Java.)
+* yeh thats pretty much wht i have
 
 ### 🎛️ Dynamic RAM Tuning Guidelines
 
