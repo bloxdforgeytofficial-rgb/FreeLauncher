@@ -1,1 +1,170 @@
+import os, sys, threading, subprocess
+import tkinter as tk
+from tkinter import messagebox
+import customtkinter as ctk
+import minecraft_launcher_lib
+
+try:
+    from pypresence import Presence
+    DISCORD_AVAILABLE = True
+except ImportError:
+    DISCORD_AVAILABLE = False
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+class FreeLauncher(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("FreeLauncher")
+        self.geometry("480x730")
+        self.resizable(False, False)
+        self.configure(fg_color="#0d0e12")
+
+        user_home = os.path.expanduser("~")
+        # Directing back to the standard official .minecraft folder 
+        # so it safely inherits Mojang's official, pre-verified Java runtimes!
+        self.mc_dir = os.path.join(user_home, "AppData", "Roaming", ".minecraft")
+        os.makedirs(self.mc_dir, exist_ok=True)
+
+        self.client_id = "1551079511758475325"
+        self.rpc = None
+        self.init_discord_rpc()
+
+        self.main_card = ctk.CTkFrame(self, width=420, height=670, fg_color="#15171e", corner_radius=20, border_width=1, border_color="#242936")
+        self.main_card.place(relx=0.5, rely=0.5, anchor="center")
+        self.main_card.pack_propagate(False)
+
+        self.title_label = ctk.CTkLabel(self.main_card, text="FREELAUNCHER", font=ctk.CTkFont(family="Helvetica", size=32, weight="bold"), text_color="#ffffff")
+        self.title_label.pack(padx=20, pady=(25, 2))
+
+        self.subtitle_label = ctk.CTkLabel(self.main_card, text="DYNAMIC MODDED EDITION", font=ctk.CTkFont(family="Helvetica", size=12, weight="bold"), text_color="#3b82f6")
+        self.subtitle_label.pack(padx=20, pady=(0, 20))
+
+        self.user_label = ctk.CTkLabel(self.main_card, text="PLAYER USERNAME", font=ctk.CTkFont(size=11, weight="bold"), text_color="#64748b")
+        self.user_label.pack(anchor="w", padx=45, pady=(0, 4))
+        self.username_entry = ctk.CTkEntry(self.main_card, placeholder_text="Enter player name...", width=330, height=45, corner_radius=10, border_color="#242936", fg_color="#1e222b", text_color="#ffffff", placeholder_text_color="#475569")
+        self.username_entry.pack(padx=20, pady=(0, 15))
+
+        self.ver_label = ctk.CTkLabel(self.main_card, text="GAME CLIENT VERSION", font=ctk.CTkFont(size=11, weight="bold"), text_color="#64748b")
+        self.ver_label.pack(anchor="w", padx=45, pady=(0, 4))
+        all_versions = self.get_all_minecraft_versions()
+        self.version_dropdown = ctk.CTkComboBox(self.main_card, values=all_versions, width=330, height=45, corner_radius=10, border_color="#242936", fg_color="#1e222b", button_color="#242936", text_color="#ffffff", dropdown_fg_color="#1e222b")
+        self.version_dropdown.pack(padx=20, pady=(0, 15))
+
+        self.mod_label = ctk.CTkLabel(self.main_card, text="MODDING UTILITY ENGINE", font=ctk.CTkFont(size=11, weight="bold"), text_color="#64748b")
+        self.mod_label.pack(anchor="w", padx=45, pady=(0, 4))
+        self.mod_dropdown = ctk.CTkComboBox(self.main_card, values=["Vanilla (Clean)", "Fabric Loader", "Forge Loader"], width=330, height=45, corner_radius=10, border_color="#242936", fg_color="#1e222b", button_color="#242936", text_color="#ffffff", dropdown_fg_color="#1e222b")
+        self.mod_dropdown.pack(padx=20, pady=(0, 15))
+
+        self.ram_label = ctk.CTkLabel(self.main_card, text="ALLOCATED SYSTEM MEMORY: 3 GB", font=ctk.CTkFont(size=11, weight="bold"), text_color="#64748b")
+        self.ram_label.pack(anchor="w", padx=45, pady=(0, 4))
+        self.ram_slider = ctk.CTkSlider(self.main_card, from_=2, to=16, number_of_steps=14, width=330, height=16, command=self.update_ram_label, fg_color="#1e222b", progress_color="#2563eb", button_color="#3b82f6")
+        self.ram_slider.set(3)
+        self.ram_slider.pack(padx=20, pady=(0, 15))
+
+        self.mods_folder_button = ctk.CTkButton(self.main_card, text="📁 OPEN MODS FOLDER", command=self.open_mods_directory, width=330, height=40, corner_radius=10, font=ctk.CTkFont(family="Helvetica", size=13, weight="bold"), fg_color="#1e222b", hover_color="#2d3340", border_width=1, border_color="#242936", text_color="#a1a1aa")
+        self.mods_folder_button.pack(padx=20, pady=(10, 10))
+
+        self.launch_button = ctk.CTkButton(self.main_card, text="LAUNCH CLIENT", command=self.start_launch_thread, width=330, height=50, corner_radius=12, font=ctk.CTkFont(family="Helvetica", size=16, weight="bold"), fg_color="#2563eb", hover_color="#1d4ed8", text_color="#ffffff")
+        self.launch_button.pack(padx=20, pady=(5, 10))
+
+        self.status_label = ctk.CTkLabel(self.main_card, text="System status: Idle", font=ctk.CTkFont(size=12), text_color="#475569")
+        self.status_label.pack(padx=20, pady=2)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def update_ram_label(self, value):
+        self.ram_label.configure(text=f"ALLOCATED SYSTEM MEMORY: {int(value)} GB")
+
+    def open_mods_directory(self):
+        mods_path = os.path.join(self.mc_dir, "mods")
+        os.makedirs(mods_path, exist_ok=True)
+        if sys.platform == "win32": os.startfile(mods_path)
+        else: subprocess.Popen(["xdg-open", mods_path])
+
+    def get_all_minecraft_versions(self):
+        try:
+            full_list = minecraft_launcher_lib.utils.get_version_list()
+            releases = [v["id"] for v in full_list if v["type"] == "release"]
+            if releases: return releases
+        except Exception: pass
+        return ["1.20.1", "1.19.4", "1.16.5", "1.9", "1.1"]
+
+    def init_discord_rpc(self):
+        if DISCORD_AVAILABLE:
+            try:
+                self.rpc = Presence(self.client_id)
+                self.rpc.connect()
+                self.rpc.update(details="On home page", state="Browsing Menu Layout")
+            except Exception: self.rpc = None
+
+    def update_discord_status(self, version_name, mod_type):
+        if self.rpc:
+            try: self.rpc.update(details=f"Playing {version_name} ({mod_type})", state="In-Game Offline Mode")
+            except Exception: pass
+
+    def start_launch_thread(self):
+        threading.Thread(target=self.launch_game, daemon=True).start()
+
+    def launch_game(self):
+        username = self.username_entry.get().strip()
+        version = self.version_dropdown.get()
+        mod_engine = self.mod_dropdown.get()
+        allocated_ram = int(self.ram_slider.get())
+        if not username:
+            messagebox.showerror("Profile Error", "Please input a profile player name.")
+            return
+        self.launch_button.configure(state="disabled", fg_color="#1e222b")
+        self.status_label.configure(text="Resolving runtime configurations...", text_color="#60a5fa")
+        
+        try:
+            # --- CRITICAL FIX ---
+            # By letting minecraft_launcher_lib query your downloaded Mojang files,
+            # it dynamically extracts the exact java runtime version match needed for 1.9 vs 1.16!
+            options = {
+                "username": username, "uuid": "00000000-0000-0000-0000-000000000000", "token": "0",
+                "jvmArguments": [f"-Xmx{allocated_ram}G", f"-Xms{allocated_ram}G"]
+            }
+            
+            # This safely scans Mojang's official local subfolder runtimes automatically
+            minecraft_launcher_lib.install.install_minecraft_version(version, self.mc_dir)
+            target_version = version
+            
+            if mod_engine == "Fabric Loader":
+                self.status_label.configure(text="Injecting Fabric hook layers...", text_color="#a855f7")
+                self.update()
+                if version in minecraft_launcher_lib.fabric.get_supported_minecraft_versions():
+                    minecraft_launcher_lib.fabric.install_fabric(version, self.mc_dir)
+                    target_version = minecraft_launcher_lib.fabric.get_latest_loader_version()
+            elif mod_engine == "Forge Loader":
+                self.status_label.configure(text="Compiling Forge core binaries...", text_color="#eab308")
+                self.update()
+                forge_ver = minecraft_launcher_lib.forge.get_latest_forge_version(version)
+                if forge_ver:
+                    minecraft_launcher_lib.forge.install_forge_version(forge_ver, self.mc_dir)
+                    target_version = f"{version}-forge-{forge_ver}"
+                    
+            self.status_label.configure(text="Spawning client process...", text_color="#4ade80")
+            self.update_discord_status(version, mod_engine)
+            
+            cmd = minecraft_launcher_lib.command.get_minecraft_command(target_version, self.mc_dir, options)
+            subprocess.Popen(cmd)
+            self.status_label.configure(text="Game running successfully!", text_color="#4ade80")
+        except Exception as error_log:
+            self.status_label.configure(text="Instance execution crash failure.", text_color="#f87171")
+            print(error_log)
+            if self.rpc:
+                try: self.rpc.update(details="On home page", state="Browsing Menu Layout")
+                except: pass
+        self.launch_button.configure(state="normal", fg_color="#2563eb")
+
+    def on_close(self):
+        if self.rpc:
+            try: self.rpc.close()
+            except: pass
+        self.destroy()
+
+if __name__ == "__main__":
+    app = FreeLauncher()
+    app.mainloop()
 
